@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Protocol
 
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import torch
@@ -25,20 +24,11 @@ class Solver:
         self,
         method="midpoint",
         nfe=32,
-        viz_name="solver",
-        viz_every=100,
-        mel_fn=None,
         time_mapping_divisor=4,
         verbose=False,
     ):
         self.configurate_(nfe=nfe, method=method)
-
         self.verbose = verbose
-        self.viz_every = viz_every
-        self.viz_name = viz_name
-
-        self._camera = None
-        self._mel_fn = mel_fn
         self._time_mapping = partial(self.exponential_decay_mapping, n=time_mapping_divisor)
 
     def configurate_(self, nfe=None, method=None):
@@ -76,39 +66,6 @@ class Solver:
 
         return t
 
-    @torch.no_grad()
-    def _maybe_camera_snap(self, *, ψt, t):
-        camera = self._camera
-        if camera is not None:
-            if ψt.shape[1] == 1:
-                # Waveform, b 1 t, plot every 100 samples
-                plt.subplot(211)
-                plt.plot(ψt.detach().cpu().numpy()[0, 0, ::100], color="blue")
-                if self._mel_fn is not None:
-                    plt.subplot(212)
-                    mel = self._mel_fn(ψt.detach().cpu().numpy()[0, 0])
-                    plt.imshow(mel, origin="lower", interpolation="none")
-            elif ψt.shape[1] == 2:
-                # Complex
-                plt.subplot(121)
-                plt.imshow(
-                    ψt.detach().cpu().numpy()[0, 0],
-                    origin="lower",
-                    interpolation="none",
-                )
-                plt.subplot(122)
-                plt.imshow(
-                    ψt.detach().cpu().numpy()[0, 1],
-                    origin="lower",
-                    interpolation="none",
-                )
-            else:
-                # Spectrogram, b c t
-                plt.imshow(ψt.detach().cpu().numpy()[0], origin="lower", interpolation="none")
-            ax = plt.gca()
-            ax.text(0.5, 1.01, f"t={t:.2f}", transform=ax.transAxes, ha="center")
-            camera.snap()
-
     @staticmethod
     def _euler_step(t, ψt, dt, f: VelocityField):
         return ψt + dt * f(t=t, ψt=ψt, dt=dt)
@@ -136,42 +93,6 @@ class Solver:
         else:
             raise ValueError(f"Unknown method: {self.method}")
 
-    def get_running_train_loop(self):
-        try:
-            # Lazy import
-            from ...utils.train_loop import TrainLoop
-
-            return TrainLoop.get_running_loop()
-        except ImportError:
-            return None
-
-    @property
-    def visualizing(self):
-        loop = self.get_running_train_loop()
-        if loop is None:
-            return
-        out_path = loop.make_current_step_viz_path(self.viz_name, ".gif")
-        return loop.global_step % self.viz_every == 0 and not out_path.exists()
-
-    def _reset_camera(self):
-        try:
-            from celluloid import Camera
-
-            self._camera = Camera(plt.figure())
-        except:
-            pass
-
-    def _maybe_dump_camera(self):
-        camera = self._camera
-        loop = self.get_running_train_loop()
-        if camera is not None and loop is not None:
-            animation = camera.animate()
-            out_path = loop.make_current_step_viz_path(self.viz_name, ".gif")
-            out_path.parent.mkdir(exist_ok=True, parents=True)
-            animation.save(out_path, writer="pillow", fps=4)
-            plt.close()
-            self._camera = None
-
     @property
     def n_steps(self):
         n = self.nfe
@@ -188,9 +109,6 @@ class Solver:
     def solve(self, f: VelocityField, ψ0: Tensor, t0=0.0, t1=1.0):
         ts = self._time_mapping(np.linspace(t0, t1, self.n_steps + 1))
 
-        if self.visualizing:
-            self._reset_camera()
-
         if self.verbose:
             steps = trange(self.n_steps, desc="CFM inference")
         else:
@@ -201,17 +119,9 @@ class Solver:
         for i in steps:
             dt = ts[i + 1] - ts[i]
             t = ts[i]
-            self._maybe_camera_snap(ψt=ψt, t=t)
             ψt = self._step(t=t, ψt=ψt, dt=dt, f=f)
 
-        self._maybe_camera_snap(ψt=ψt, t=ts[-1])
-
-        ψ1 = ψt
-        del ψt
-
-        self._maybe_dump_camera()
-
-        return ψ1
+        return ψt
 
     def __call__(self, f: VelocityField, ψ0: Tensor, t0=0.0, t1=1.0):
         return self.solve(f=f, ψ0=ψ0, t0=t0, t1=t1)
@@ -248,7 +158,6 @@ class CFM(nn.Module):
     cond_dim: int
     output_dim: int
     time_emb_dim: int = 128
-    viz_name: str = "cfm"
     solver_nfe: int = 32
     solver_method: str = "midpoint"
     time_mapping_divisor: int = 4
@@ -256,8 +165,6 @@ class CFM(nn.Module):
     def __post_init__(self):
         super().__init__()
         self.solver = Solver(
-            viz_name=self.viz_name,
-            viz_every=1,
             nfe=self.solver_nfe,
             method=self.solver_method,
             time_mapping_divisor=self.time_mapping_divisor,

@@ -1,6 +1,29 @@
-[tool.black]
-line-length = 120
-target-version = ['py310']
+[project]
+name = "resemble-enhance"
+version = "0.1.0"
+description = "AI-driven audio enhancement for your audio files, powered by Resemble AI"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "librosa",
+    "numpy",
+    "omegaconf",
+    "rich",
+    "scipy",
+    "soundfile",
+    "torch",
+    "torchaudio",
+    "tqdm",
+    "resampy",
+    "typer",
+    "torchcodec>=0.9.1",
+]
 
-[tool.isort]
-line_length = 120
+[project.optional-dependencies]
+app = [
+    "gradio>=4.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

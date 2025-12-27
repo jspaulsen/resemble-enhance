@@ -62,27 +62,6 @@ class HParams:
     gradient_clipping: float = 1.0
 
     @property
-    def deepspeed_config(self):
-        return {
-            "train_micro_batch_size_per_gpu": self.batch_size_per_gpu,
-            "optimizer": {
-                "type": "Adam",
-                "params": {"lr": float(self.min_lr)},
-            },
-            "scheduler": {
-                "type": "WarmupDecayLR",
-                "params": {
-                    "warmup_min_lr": float(self.min_lr),
-                    "warmup_max_lr": float(self.max_lr),
-                    "warmup_num_steps": self.warmup_steps,
-                    "total_num_steps": self.max_steps,
-                    "warmup_type": "linear",
-                },
-            },
-            "gradient_clipping": self.gradient_clipping,
-        }
-
-    @property
     def stft_cfgs(self):
         assert self.wav_rate == 44_100, f"wav_rate must be 44_100, got {self.wav_rate}"
         return [_make_stft_cfg(h) for h in (100, 256, 512)]

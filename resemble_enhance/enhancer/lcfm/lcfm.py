@@ -1,7 +1,6 @@
 import logging
 from enum import Enum
 
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch import Tensor, nn
@@ -63,43 +62,6 @@ class LCFM(nn.Module):
             return None
         return loop.global_step
 
-    @torch.no_grad()
-    def _visualize(self, x, y, y_):
-        loop = self.get_running_train_loop()
-        if loop is None:
-            return
-
-        plt.subplot(221)
-        plt.imshow(y[0].detach().cpu().numpy(), aspect="auto", origin="lower", interpolation="none")
-        plt.title("GT")
-
-        plt.subplot(222)
-        y_ = y_[:, : y.shape[1]]
-        plt.imshow(y_[0].detach().cpu().numpy(), aspect="auto", origin="lower", interpolation="none")
-        plt.title("Posterior")
-
-        plt.subplot(223)
-        z_ = self.cfm(x)
-        y__ = self.ae.decode(z_)
-        y__ = y__[:, : y.shape[1]]
-        plt.imshow(y__[0].detach().cpu().numpy(), aspect="auto", origin="lower", interpolation="none")
-        plt.title("C-Prior")
-        del y__
-
-        plt.subplot(224)
-        z_ = torch.randn_like(z_)
-        y__ = self.ae.decode(z_)
-        y__ = y__[:, : y.shape[1]]
-        plt.imshow(y__[0].detach().cpu().numpy(), aspect="auto", origin="lower", interpolation="none")
-        plt.title("Prior")
-        del z_, y__
-
-        path = loop.make_current_step_viz_path("recon", ".png")
-        path.parent.mkdir(exist_ok=True, parents=True)
-        plt.tight_layout()
-        plt.savefig(path, dpi=500)
-        plt.close()
-
     def _scale(self, z: Tensor):
         return z * self.z_scale
 
@@ -147,6 +109,7 @@ class LCFM(nn.Module):
             h = ae_output.decoded
 
             if h is not None and self.global_step is not None and self.global_step % 100 == 0:
-                self._visualize(x[:1], y[:1], h[:1])
+                # self._visualize(x[:1], y[:1], h[:1])
+                pass
 
         return h
